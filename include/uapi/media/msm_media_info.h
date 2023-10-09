@@ -5,10 +5,27 @@
 #include <asm/bitsperlong.h>
 
 
+#ifndef CONFIG_ARCH_SDM660
+#if __BITS_PER_LONG == 64
+#define NV12_STRIDE_ALIGNMENT 512
+#define NV12_SCANLINE_ALIGNMENT 512
+#else
+#define NV12_STRIDE_ALIGNMENT 128
+#define NV12_SCANLINE_ALIGNMENT 32
+#endif
+
+#ifdef VENUS_USE_64BIT_ALIGNMENT
+#undef NV12_STRIDE_ALIGNMENT
+#undef NV12_SCANLINE_ALIGNMENT
+#define NV12_STRIDE_ALIGNMENT 512
+#define NV12_SCANLINE_ALIGNMENT 512
+#endif
+#else
 #define NV12_STRIDE_ALIGNMENT 128
 #define NV12_SCANLINE_ALIGNMENT 32
 
 #define UBWC_EXTRA_SIZE 16384 /* 16*1024 extra size */
+#endif /* CONFIG_ARCH_SDM660 */
 
 /* Width and Height should be multiple of 16 */
 #define INTERLACE_WIDTH_MAX 1920
@@ -1239,7 +1256,12 @@ invalid_input:
 static inline unsigned int VENUS_BUFFER_SIZE(unsigned int color_fmt,
 	unsigned int width, unsigned int height)
 {
-	unsigned int size = 0, uv_alignment = 0;
+	#ifdef CONFIG_ARCH_SDM660
+		unsigned int size = 0, uv_alignment = 0;
+	#else
+		unsigned int size = 0;
+	#endif
+
 	unsigned int y_plane, uv_plane, y_stride,
 		uv_stride, y_sclines, uv_sclines;
 	unsigned int y_ubwc_plane = 0, uv_ubwc_plane = 0;
@@ -1266,9 +1288,16 @@ static inline unsigned int VENUS_BUFFER_SIZE(unsigned int color_fmt,
 	case COLOR_FMT_P010:
 	case COLOR_FMT_NV12_512:
 	case COLOR_FMT_NV12_128:
-		uv_alignment = 4096;
+		#ifdef CONFIG_ARCH_SDM660
+			uv_alignment = 4096;
+		#endif
 		y_plane = y_stride * y_sclines;
-		uv_plane = uv_stride * uv_sclines + uv_alignment;
+
+		#ifdef CONFIG_ARCH_SDM660
+			uv_plane = uv_stride * uv_sclines + uv_alignment;
+		#else
+			uv_plane = uv_stride * uv_sclines;
+		#endif	
 		size = y_plane + uv_plane;
 		break;
 	case COLOR_FMT_NV12_UBWC:
@@ -1311,9 +1340,15 @@ static inline unsigned int VENUS_BUFFER_SIZE(unsigned int color_fmt,
 			uv_meta_plane = MSM_MEDIA_ALIGN(uv_meta_stride *
 				uv_meta_scanlines, 4096);
 			size = (y_ubwc_plane + uv_ubwc_plane + y_meta_plane +
-				uv_meta_plane)+(64 * y_stride);
+				#ifdef CONFIG_ARCH_SDM660
+					uv_meta_plane)+(64 * y_stride);
+				#else
+					uv_meta_plane);
+				#endif
 		}
-		size += UBWC_EXTRA_SIZE;
+		#ifdef CONFIG_ARCH_SDM660
+			size += UBWC_EXTRA_SIZE;
+		#endif
 		break;
 	case COLOR_FMT_NV12_BPP10_UBWC:
 		y_ubwc_plane = MSM_MEDIA_ALIGN(y_stride * y_sclines, 4096);
